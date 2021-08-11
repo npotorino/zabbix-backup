@@ -59,6 +59,7 @@ COMPRESSION="gz"
 QUIET="no"
 REVERSELOOKUP="yes"
 COLUMN_NAMES="no"
+CUSTOM_FORMAT="no"
 GENERATIONSTOKEEP=0
 ZBX_CONFIG="/etc/zabbix/zabbix_server.conf"
 READ_ZBX_CONFIG="yes"
@@ -155,6 +156,9 @@ OPTIONS
     -N
         Add column names in INSERT INTO .. VALUES .. and quote them as needed
 
+    -C
+        Custom dump format. (PostgreSQL only)
+
     -f
         Force backup for unknown tables / forward compatibility:
         Don't complain about unknown tables and make a full backup of them
@@ -200,7 +204,7 @@ fi
 # PARSE COMMAND LINE ARGUMENTS
 #
 DB_GIVEN=0
-while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNqxZfiv" opt; do
+while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfiv" opt; do
     case $opt in
         t)  DBTYPE="$OPTARG" ;;
         H)  ODBHOST="$OPTARG" ;;
@@ -219,6 +223,7 @@ while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNqxZfiv" opt; do
         0)  COMPRESSION="" ;;
         n)  REVERSELOOKUP="no" ;;
         N)  COLUMN_NAMES="yes" ;;
+        C)  CUSTOM_FORMAT="yes" ;;
         f)  HANDLE_UNKNOWN="backup" ;;
         i)  HANDLE_UNKNOWN="ignore" ;;
         q)  QUIET="yes" ;;
@@ -227,6 +232,9 @@ while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNqxZfiv" opt; do
         :)  echo "Option -$OPTARG requires an argument" >&2; exit 1 ;;
     esac
 done
+
+# if DUMPDIR is - we print to stdout, so we set quiet
+[ "$DUMPDIR" = "-" ] && QUIET="yes"
 
 [ -n "$MYSQL_CONFIG" ] && READ_ZBX_CONFIG="no"
 
@@ -334,9 +342,11 @@ case $DBTYPE in
            echo "$DBHOST:$DBPORT:$DBNAME:$DBUSER:$DBPASS" > $PGPASSFILE
            chmod 600 $PGPASSFILE
         fi
-        DB_OPTS_BATCH=("${DB_OPTS[@]}" -Atw)
+        DB_OPTS_BATCH=("${DB_OPTS[@]}" -AtwX)
         [ -n "$DBNAME" ] && DB_OPTS_BATCH=("${DB_OPTS_BATCH[@]}" -d $DBNAME)
-        [ "${COLUMN_NAMES}" == "yes" ] && DB_OPTS=("${DB_OPTS[@]}" --format=plain --inserts --column-inserts --quote-all-identifiers)
+        [ "${CUSTOM_FORMAT}" == "yes" ] && DB_OPTS=("${DB_OPTS[@]}" --format=custom)
+        [ "${CUSTOM_FORMAT}" == "no" ] && DB_OPTS=("${DB_OPTS[@]}" --format=plain)
+        [ "${COLUMN_NAMES}" == "yes" ] && DB_OPTS=("${DB_OPTS[@]}" --inserts --column-inserts --quote-all-identifiers)
         ;;
 esac
 
@@ -508,7 +518,8 @@ DUMPFILE="$DUMPDIR/$DUMPFILEBASE"
 PROCESSED_SCHEMAONLY_TABLES=()
 i=0
 
-mkdir -p "${DUMPDIR}"
+# make folder if not std out
+[ "$DUMPDIR" != "-" ] && mkdir -p "${DUMPDIR}"
 
 [ "$QUIET" == "no" ] && echo "Starting table backups..."
 case $DBTYPE in
@@ -523,7 +534,11 @@ case $DBTYPE in
             done <<<"$DB_TABLES"
         fi
 
-        mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME > "$DUMPFILE" 2>$ERRORLOG
+        if [ "$DUMPDIR" != "-" ]; then
+            mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME > "$DUMPFILE" 2>$ERRORLOG
+        else
+            mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME 2>$ERRORLOG
+        fi;
 
         if [ $? -ne 0 ]; then echo $'\nERROR: Could not backup table schemas.\n' >&2; cat $ERRORLOG >&2; exit 1; fi
 
@@ -541,7 +556,11 @@ case $DBTYPE in
             fi
         done <<<"$DB_TABLES"
 
-        mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME >> "$DUMPFILE" 2>$ERRORLOG
+        if [ "$DUMPDIR" != "-" ]; then
+            mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME >> "$DUMPFILE" 2>$ERRORLOG
+        else
+            mysqldump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" $DBNAME 2>$ERRORLOG
+        fi;
 
         if [ $? -ne 0 ]; then echo $'\nERROR: Could not backup table data.\n' >&2; cat $ERRORLOG >&2; exit 1; fi
     ;;
@@ -561,7 +580,11 @@ case $DBTYPE in
 
         [ -n "$DBSCHEMA" ] && DUMP_OPTS=("${DUMP_OPTS[@]}" -n $DBSCHEMA)
 
-        pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME > "$DUMPFILE" 2>$ERRORLOG
+        if [ "$DUMPDIR" != "-" ]; then
+            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME > "$DUMPFILE" 2>$ERRORLOG
+        else
+            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME 2>$ERRORLOG
+        fi;
 
         if [ $? -ne 0 ]; then
             echo $'\nERROR: Could not backup database.\n' >&2
@@ -585,8 +608,8 @@ if [ "$QUIET" == "no" ]; then
 fi
 
 EXITCODE=0
-if [ "$COMPRESSION" == "gz" ]; then gzip -f "$DUMPFILE"; EXITCODE=$?; fi
-if [ "$COMPRESSION" == "xz" ]; then xz   -f "$DUMPFILE"; EXITCODE=$?; fi
+if [ "$COMPRESSION" == "gz" ] && [ "$DUMPDIR" != "-" ]; then gzip -f "$DUMPFILE"; EXITCODE=$?; fi
+if [ "$COMPRESSION" == "xz" ] && [ "$DUMPDIR" != "-" ]; then xz   -f "$DUMPFILE"; EXITCODE=$?; fi
 if [ $EXITCODE -ne 0 ]; then
     echo $'\nERROR: Could not compress backup file, see previous messages' >&2
     clean_psql_pass
@@ -598,7 +621,7 @@ fi
 #
 # ROTATE OLD BACKUPS
 #
-if [ $GENERATIONSTOKEEP -gt 0 ]; then
+if [ $GENERATIONSTOKEEP -gt 0 ] && [ "$DUMPDIR" != "-" ]; then
     [ "$QUIET" == "no" ] && echo "Removing old backups, keeping up to $GENERATIONSTOKEEP"
     REMOVE_OLD_CMD="cd \"$DUMPDIR\" && ls -t \"${DUMPFILENAME_PREFIX}\"* | /usr/bin/awk \"NR>${GENERATIONSTOKEEP}\" | xargs rm -f "
     eval ${REMOVE_OLD_CMD}
