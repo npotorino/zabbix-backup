@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION=0.9.5
+VERSION=0.9.6
 #
 # NAME
 #     zabbix-dump - Configuration Backup for Zabbix' MySQL or PostgreSQL data
@@ -619,15 +619,19 @@ exit 0
 #
 
 __DATA__
-acknowledges               1.3.1    - 5.0.2     SCHEMAONLY
+#acknowledges               1.3.1    - 5.0.2     SCHEMAONLY
+acknowledges               1.3.1    - 5.0.2
 actions                    1.3.1    - 5.0.2
-alerts                     1.3.1    - 5.0.2     SCHEMAONLY
+#alerts                     1.3.1    - 5.0.2     SCHEMAONLY
+alerts                     1.3.1    - 5.0.2
 application_discovery      2.5.0    - 5.0.2
 application_prototype      2.5.0    - 5.0.2
 application_template       2.1.0    - 5.0.2
 applications               1.3.1    - 5.0.2
-auditlog                   1.3.1    - 5.0.2     SCHEMAONLY
-auditlog_details           1.7      - 5.0.2     SCHEMAONLY
+#auditlog                   1.3.1    - 5.0.2     SCHEMAONLY
+#auditlog_details           1.7      - 5.0.2     SCHEMAONLY
+auditlog                   1.3.1    - 5.0.2
+auditlog_details           1.7      - 5.0.2
 autoreg                    1.3.1    - 1.3.4
 autoreg_host               1.7      - 5.0.2
 conditions                 1.3.1    - 5.0.2
@@ -650,10 +654,14 @@ dhosts                     1.3.4    - 5.0.2
 drules                     1.3.4    - 5.0.2
 dservices                  1.3.4    - 5.0.2
 escalations                1.5.3    - 5.0.2
-event_recovery             3.2.0    - 5.0.2     SCHEMAONLY
-event_suppress             4.0.0    - 5.0.2     SCHEMAONLY
-event_tag                  3.2.0    - 5.0.2     SCHEMAONLY
-events                     1.3.1    - 5.0.2     SCHEMAONLY
+#event_recovery             3.2.0    - 5.0.2     SCHEMAONLY
+#event_suppress             4.0.0    - 5.0.2     SCHEMAONLY
+#event_tag                  3.2.0    - 5.0.2     SCHEMAONLY
+#events                     1.3.1    - 5.0.2     SCHEMAONLY
+event_recovery             3.2.0    - 5.0.2
+event_suppress             4.0.0    - 5.0.2
+event_tag                  3.2.0    - 5.0.2
+events                     1.3.1    - 5.0.2
 expressions                1.7      - 5.0.2
 functions                  1.3.1    - 5.0.2
 globalmacro                1.7      - 5.0.2
@@ -665,15 +673,19 @@ graphs_items               1.3.1    - 5.0.2
 group_discovery            2.1.4    - 5.0.2
 group_prototype            2.1.4    - 5.0.2
 groups                     1.3.1    - 3.4.15
+ha_node                    6.0.0    - 6.0.0
 help_items                 1.3.1    - 2.1.8
 history                    1.3.1    - 5.0.2     SCHEMAONLY
 history_log                1.3.1    - 5.0.2     SCHEMAONLY
 history_str                1.3.1    - 5.0.2     SCHEMAONLY
-history_str_sync           1.3.1    - 2.2.23    SCHEMAONLY
-history_sync               1.3.1    - 2.2.23    SCHEMAONLY
+#history_str_sync           1.3.1    - 2.2.23    SCHEMAONLY
+history_str_sync           1.3.1    - 2.2.23
+#history_sync               1.3.1    - 2.2.23    SCHEMAONLY
+history_sync               1.3.1    - 2.2.23
 history_text               1.3.1    - 5.0.2     SCHEMAONLY
 history_uint               1.3.1    - 5.0.2     SCHEMAONLY
-history_uint_sync          1.3.1    - 2.2.23    SCHEMAONLY
+#history_uint_sync          1.3.1    - 2.2.23    SCHEMAONLY
+history_uint_sync          1.3.1    - 2.2.23
 host_discovery             2.1.4    - 5.0.2
 host_inventory             1.9.6    - 5.0.2
 host_profile               1.9.3    - 1.9.5
@@ -748,8 +760,10 @@ opmessage                  1.9.2    - 5.0.2
 opmessage_grp              1.9.2    - 5.0.2
 opmessage_usr              1.9.2    - 5.0.2
 optemplate                 1.9.2    - 5.0.2
-problem                    3.2.0    - 5.0.2     SCHEMAONLY
-problem_tag                3.2.0    - 5.0.2     SCHEMAONLY
+#problem                    3.2.0    - 5.0.2     SCHEMAONLY
+#problem_tag                3.2.0    - 5.0.2     SCHEMAONLY
+problem                    3.2.0    - 5.0.2
+problem_tag                3.2.0    - 5.0.2
 profiles                   1.3.1    - 5.0.2
 proxy_autoreg_host         1.7      - 5.0.2
 proxy_dhistory             1.5      - 5.0.2
@@ -769,10 +783,18 @@ screens_items              1.3.1    - 5.0.2
 script_param               5.4.0    - 5.4.0
 scripts                    1.5      - 5.0.2
 service_alarms             1.3.1    - 5.0.2
+service_problem            6.0.0    - 6.0.0
+service_problem_tag        6.0.0    - 6.0.0
+service_status_rule        6.0.0    - 6.0.0
+service_tag                6.0.0    - 6.0.0
 services                   1.3.1    - 5.0.2
 services_links             1.3.1    - 5.0.2
 services_times             1.3.1    - 5.0.2
 sessions                   1.3.1    - 5.0.2
+sla                        6.0.0    - 6.0.0
+sla_excluded_downtime      6.0.0    - 6.0.0
+sla_schedule               6.0.0    - 6.0.0
+sla_service_tag            6.0.0    - 6.0.0
 slides                     1.3.4    - 5.0.2
 slideshow_user             3.0.0    - 5.0.2
 slideshow_usrgrp           3.0.0    - 5.0.2
@@ -789,13 +811,19 @@ sysmaps_elements           1.3.1    - 5.0.2
 sysmaps_link_triggers      1.5      - 5.0.2
 sysmaps_links              1.3.1    - 5.0.2
 tag_filter                 4.0.0    - 5.0.2
-task                       3.2.0    - 5.0.2     SCHEMAONLY
-task_acknowledge           3.4.0    - 5.0.2     SCHEMAONLY
-task_check_now             4.0.0    - 5.0.2     SCHEMAONLY
-task_close_problem         3.2.0    - 5.0.2     SCHEMAONLY
+#task                       3.2.0    - 5.0.2     SCHEMAONLY
+#task_acknowledge           3.4.0    - 5.0.2     SCHEMAONLY
+#task_check_now             4.0.0    - 5.0.2     SCHEMAONLY
+#task_close_problem         3.2.0    - 5.0.2     SCHEMAONLY
+task                       3.2.0    - 5.0.2
+task_acknowledge           3.4.0    - 5.0.2
+task_check_now             4.0.0    - 5.0.2
+task_close_problem         3.2.0    - 5.0.2
 task_data                  5.0.0    - 5.0.2
-task_remote_command        3.4.0    - 5.0.2     SCHEMAONLY
-task_remote_command_result 3.4.0    - 5.0.2     SCHEMAONLY
+#task_remote_command        3.4.0    - 5.0.2     SCHEMAONLY
+#task_remote_command_result 3.4.0    - 5.0.2     SCHEMAONLY
+task_remote_command        3.4.0    - 5.0.2
+task_remote_command_result 3.4.0    - 5.0.2
 task_result                5.0.0    - 5.0.2
 timeperiods                1.7      - 5.0.2
 token                      5.4.0    - 5.4.0
