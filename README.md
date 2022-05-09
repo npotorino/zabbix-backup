@@ -1,6 +1,6 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 5.4.
+This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.0.
 
 ## Download
 
