@@ -46,6 +46,12 @@ systemctl start zabbix-server.service
 
 ## Version history
 
+**0.9.7 (2022-05-10)**
+- ENH: Support for Zabbix 6.0
+
+**0.9.6 (2021-12-13)**
+- FIX: fix item_rtdata retention (@kernbug)
+
 **0.9.5 (2021-07-23)**
 - ENH: Support for Zabbix 5.2 and 5.4
 - ENH: Add column names to INSERT INTO .. VALUES and quote names as needed (@diffway)
