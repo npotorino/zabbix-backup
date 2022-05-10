@@ -338,9 +338,9 @@ case $DBTYPE in
         [ -n "$DBUSER" ] && DB_OPTS=("${DB_OPTS[@]}" -U $DBUSER)
         DB_OPTS=("${DB_OPTS[@]}" -p"$DBPORT")
         if [ -n "$DBPASS" ]; then
-           export PGPASSFILE=$(mktemp -u)
-           echo "$DBHOST:$DBPORT:$DBNAME:$DBUSER:$DBPASS" > $PGPASSFILE
-           chmod 600 $PGPASSFILE
+            export PGPASSFILE=$(mktemp -u)
+            echo "$DBHOST:$DBPORT:$DBNAME:$DBUSER:$DBPASS" > $PGPASSFILE
+            chmod 600 $PGPASSFILE
         fi
         DB_OPTS_BATCH=("${DB_OPTS[@]}" -AtwX)
         [ -n "$DBNAME" ] && DB_OPTS_BATCH=("${DB_OPTS_BATCH[@]}" -d $DBNAME)
@@ -410,7 +410,7 @@ check_binary() {
 }
 clean_psql_pass() {
     if [ $DBTYPE = "psql" -a -n "$PGPASSFILE" ]; then
-       rm -f $PGPASSFILE
+        rm -f $PGPASSFILE
     fi
 }
 
