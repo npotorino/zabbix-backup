@@ -1,6 +1,6 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 5.4.
+This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.0.
 
 ## Download
 
@@ -45,6 +45,12 @@ systemctl start zabbix-server.service
 ```
 
 ## Version history
+
+**0.9.7 (2022-05-10)**
+- ENH: Support for Zabbix 6.0
+
+**0.9.6 (2021-12-13)**
+- FIX: fix item_rtdata retention (@kernbug)
 
 **0.9.5 (2021-07-23)**
 - ENH: Support for Zabbix 5.2 and 5.4
