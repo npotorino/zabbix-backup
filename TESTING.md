@@ -1,4 +1,3 @@
-
 # create test env
 
 ## mysql
@@ -32,8 +31,25 @@ docker run --name zabbix-server-mysql -t \
     --network=zabbix-net \
     --restart unless-stopped \
     -d zabbix/zabbix-server-mysql:alpine-6.0-latest
-
 ```
+
+### web interface
+
+not needed for backup/restore testing
+
+```bash
+docker run --name some-zabbix-web-nginx-mysql -t \
+    -p 8888:8080 \
+    -e DB_SERVER_HOST="mysql-server-test" \
+    -e MYSQL_USER="zabbix" \
+    -e MYSQL_PASSWORD="zabbix_pwd" \
+    -e ZBX_SERVER_HOST="zabbix-server-mysql" \
+    -e PHP_TZ="Europe/Riga" \
+    --network=zabbix-net \
+    --restart unless-stopped \
+    -d zabbix/zabbix-web-nginx-mysql:alpine-6.0-latest
+```
+
 
 ## postgresql
 
@@ -52,7 +68,7 @@ docker run --name zabbix-server-pgsql -t \
 # clean env
 
 ```bash
-docker rm -f zabbix-server-mysql zabbix-server-pgsql mysql-server-test
+docker rm -f zabbix-server-mysql zabbix-server-pgsql mysql-server-test some-zabbix-web-nginx-mysql
 docker volume rm mysql-data22
 docker network rm zabbix-net
 ```
