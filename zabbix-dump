@@ -457,7 +457,7 @@ case $DBTYPE in
         DB_TABLES=$(mysql "${DB_OPTS_BATCH[@]}" -e "SELECT table_name FROM information_schema.tables WHERE table_schema = '$DBNAME'" 2>$ERRORLOG)
         ;;
     psql)
-        DB_TABLES=$(psql "${DB_OPTS_BATCH[@]}" -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_catalog='$DBNAME' AND table_type='BASE TABLE'" 2>$ERRORLOG)
+        DB_TABLES=$(psql "${DB_OPTS_BATCH[@]}" -c "SELECT table_name FROM information_schema.tables WHERE table_schema='$DBSCHEMA' AND table_catalog='$DBNAME' AND table_type='BASE TABLE'" 2>$ERRORLOG)
         ;;
 esac
 if [ $? -ne 0 ]; then
