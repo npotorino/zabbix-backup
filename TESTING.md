@@ -38,7 +38,7 @@ docker run --name zabbix-server-mysql -t \
 not needed for backup/restore testing
 
 ```bash
-docker run --name some-zabbix-web-nginx-mysql -t \
+docker run --name zabbix-web-nginx-mysql -t \
     -p 8888:8080 \
     -e DB_SERVER_HOST="mysql-server-test" \
     -e MYSQL_USER="zabbix" \
@@ -50,25 +50,69 @@ docker run --name some-zabbix-web-nginx-mysql -t \
     -d zabbix/zabbix-web-nginx-mysql:alpine-6.0-latest
 ```
 
-
 ## postgresql
 
 ```bash
 docker network create zabbix-net
 
-...to be defined...
+docker run --name psql-server-test -t \
+    -p 5432:5432 \
+    -e POSTGRES_DB="zabbix" \
+    -e POSTGRES_USER="zabbix" \
+    -e POSTGRES_PASSWORD="zabbix_pwd" \
+    --network=zabbix-net \
+    -v psql-data22:/var/lib/postgresql/data \
+    --restart unless-stopped \
+    -d postgres:13-alpine
 
 docker run --name zabbix-server-pgsql -t \
-    ...to be defined... \
+    -e DB_SERVER_HOST="psql-server-test" \
+    -e POSTGRES_USER="zabbix" \
+    -e POSTGRES_PASSWORD="zabbix_pwd" \
     --network=zabbix-net \
     --restart unless-stopped \
     -d zabbix/zabbix-server-pgsql:alpine-6.0-latest
 ```
 
+## postgresql + timescaledb
+
+```bash
+docker network create zabbix-net
+
+docker run --name timescaledb-server-test -t \
+    -p 5432:5432 \
+    -e POSTGRES_DB="zabbix" \
+    -e POSTGRES_USER="zabbix" \
+    -e POSTGRES_PASSWORD="zabbix_pwd" \
+    --network=zabbix-net \
+    -v tdb-data22:/var/lib/postgresql/data \
+    --restart unless-stopped \
+    -d timescale/timescaledb:latest-pg13
+
+docker run --name zabbix-server-pgsql -t \
+    -e DB_SERVER_HOST="timescaledb-server-test" \
+    -e POSTGRES_USER="zabbix" \
+    -e POSTGRES_PASSWORD="zabbix_pwd" \
+    --network=zabbix-net \
+    --restart unless-stopped \
+    -d zabbix/zabbix-server-pgsql:alpine-6.0-latest
+```
+
+
 # clean env
 
 ```bash
-docker rm -f zabbix-server-mysql zabbix-server-pgsql mysql-server-test some-zabbix-web-nginx-mysql
-docker volume rm mysql-data22
+docker rm -f zabbix-server-mysql mysql-server-test zabbix-web-nginx-mysql
+docker rm -f zabbix-server-pgsql psql-server-test timescaledb-server-test zabbix-web-nginx-psql
+docker volume rm mysql-data22 psql-data22 tdb-data22
 docker network rm zabbix-net
 ```
+
+# simple test commands
+
+| desc | cmd |
+|---|---|
+| mysql | ./zabbix-dump -H ... -p zabbix_pwd -Z |
+| mysql, stdout | ./zabbix-dump -H ... -p zabbix_pwd -Z -o - |
+| psql | ./zabbix-dump -H ... -t psql -p zabbix_pwd -Z |
+| psql, custom format | ./zabbix-dump -H ... -t psql -p zabbix_pwd -Z -C |
