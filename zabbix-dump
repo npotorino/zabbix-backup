@@ -248,7 +248,7 @@ if [[ "${READ_ZBX_CONFIG}" == "yes" && -f "${ZBX_CONFIG}" && -r "${ZBX_CONFIG}" 
     DBNAME="$(/usr/bin/awk -F'=' '/^DBName/{ print $2 }' "${ZBX_CONFIG}")"
     DBSCHEMA="$(/usr/bin/awk -F'=' '/^DBSchema/{ print $2 }' "${ZBX_CONFIG}")"
     DBUSER="$(/usr/bin/awk -F'=' '/^DBUser/{ print $2 }' "${ZBX_CONFIG}")"
-    DBPASS="$(/usr/bin/awk -F'=' '/^DBPassword/{ print $2 }' "${ZBX_CONFIG}")"
+    DBPASS="$(/usr/bin/grep '^DBPassword=' "${ZBX_CONFIG}" | cut -d= -f2-)"
 
     # set non-existing variables to their Zabbix defaults (if they are non-empty string)
     [ -z ${DBHOST+x} ] && DBHOST="localhost"
