@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-VERSION=0.9.9
+VERSION=0.9.10
 #
 # NAME
 #     zabbix-dump - Configuration Backup for Zabbix' MySQL or PostgreSQL data
@@ -276,9 +276,10 @@ else
     fi
 fi
 
-# Always set default ports, even if we read other parameters from zabbix_server.conf
+# Always set defaults, even if we read other parameters from zabbix_server.conf
 [[ -z "$DBPORT" && "$DBTYPE" == "mysql" ]] && DBPORT="3306"
 [[ -z "$DBPORT" && "$DBTYPE" == "psql"  ]] && DBPORT="5432"
+[ -z "$DBSCHEMA" ] && DBSCHEMA="$DEFAULT_DBSCHEMA"
 
 # Options specified via command line override defaults or those from zabbix_server.conf (if any)
 [ -n "$ODBHOST" ] && DBHOST=$ODBHOST

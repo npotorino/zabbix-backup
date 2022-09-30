@@ -46,6 +46,9 @@ systemctl start zabbix-server.service
 
 ## Version history
 
+**0.9.10 (2022-09-30)**
+- FIX: use the default schema for PostgreSQL, when command line parameter is not set
+
 **0.9.9 (2022-08-31)**
 - ENH: zabbix dump add custom format (pg), stdout dump (@gullevek)
 - ENH: minimal automated syntax check through Github Actions
