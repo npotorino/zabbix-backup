@@ -1,6 +1,6 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.2.
+This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.4.
 
 ## Download
 
@@ -45,6 +45,10 @@ systemctl start zabbix-server.service
 ```
 
 ## Version history
+
+**0.9.11 (2023-05-02)**
+- ENH: Support for Zabbix 6.4
+- FIX: force decimal interpretation in db versioning
 
 **0.9.10 (2022-09-30)**
 - FIX: use the default schema for PostgreSQL, when command line parameter is not set
