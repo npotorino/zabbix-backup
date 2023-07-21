@@ -544,7 +544,7 @@ case $DBTYPE in
         if [ $? -ne 0 ]; then echo $'\nERROR: Could not backup table schemas.\n' >&2; cat $ERRORLOG >&2; exit 1; fi
 
         # dump data
-        DUMP_OPTS=(--opt --single-transaction --skip-lock-tables --no-create-info --skip-extended-insert)
+        DUMP_OPTS=(--opt --single-transaction --skip-lock-tables --no-create-info --skip-extended-insert --skip-triggers)
         while read -r table; do
             if elementIn "$table" "${SCHEMAONLY_TABLES[@]}"; then
                 DUMP_OPTS+=(--ignore-table=$DBNAME.$table)
