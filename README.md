@@ -51,23 +51,11 @@ su - postgres
 dropdb zabbix
 # we assume the zabbix user already exists, if it doesnt: createuser --pwprompt zabbix
 createdb -O zabbix zabbix
-cat /usr/share/zabbix-postgresql/schema.sql | psql zabbix
+cat /usr/share/zabbix-postgresql/schema.sql | psql -h 127.0.0.1 -U zabbix -d zabbix
 gunzip zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
-pg_restore --disable-triggers --data-only -d zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+pg_restore --disable-triggers --data-only -d zabbix zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
 cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
-```
-
-If the table ownership is wrong: connect to the `zabbix` database with the superuser:
-```sql
-DO $$ 
-DECLARE
-    table_name text;
-BEGIN
-    FOR table_name IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
-        EXECUTE 'ALTER TABLE public.' || table_name || ' OWNER TO zabbix;';
-    END LOOP;
-END $$;
 ```
 
 ## Version history
