@@ -16,7 +16,7 @@ Please see the [Project Wiki](https://github.com/npotorino/zabbix-backup/wiki).
 
 ### Backup
 
-Example: backup Zabbix 5.0.1 with PostgreSQL and TimeScaleDB
+Example: backup Zabbix with PostgreSQL and TimeScaleDB
 
 ```
 git clone https://github.com/npotorino/zabbix-backup
@@ -27,21 +27,47 @@ cd zabbix-backup
 ### Restore
 
 Example: restore Zabbix 5.0 with PostgreSQL and TimeScaleDB
+```bash
+# systemctl stop zabbix-server.service
+su - postgres
+dropdb zabbix
+createdb -O zabbix zabbix
 
-```
-systemctl stop zabbix-server.service
-sudo -u postgres dropdb zabbix
-sudo -u postgres createdb -O zabbix zabbix
-
-echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | sudo -u postgres psql zabbix
-echo "SELECT timescaledb_pre_restore();" | sudo -u postgres psql zabbix
+echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
+echo "SELECT timescaledb_pre_restore();" | psql zabbix
 
 gunzip /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
-sudo -u postgres psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 
-echo "SELECT timescaledb_post_restore();" | sudo -u postgres psql zabbix
+echo "SELECT timescaledb_post_restore();" | psql zabbix
 systemctl restart postgresql-12.service
-systemctl start zabbix-server.service
+# systemctl start zabbix-server.service
+```
+
+A different approach using the original schema and `pg_restore` with the custom format. Zabbix version: 5.0. PostgreSQL with TimescaleDB.
+```bash
+# systemctl stop zabbix-server.service
+su - postgres
+dropdb zabbix
+# we assume the zabbix user already exists, if it doesnt: createuser --pwprompt zabbix
+createdb -O zabbix zabbix
+cat /usr/share/zabbix-postgresql/schema.sql | psql zabbix
+gunzip zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
+pg_restore --disable-triggers --data-only -d zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
+cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
+```
+
+If the table ownership is wrong: connect to the `zabbix` database with the superuser:
+```sql
+DO $$ 
+DECLARE
+    table_name text;
+BEGIN
+    FOR table_name IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+        EXECUTE 'ALTER TABLE public.' || table_name || ' OWNER TO zabbix;';
+    END LOOP;
+END $$;
 ```
 
 ## Version history
