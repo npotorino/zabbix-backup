@@ -60,6 +60,9 @@ cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
 
 ## Version history
 
+**0.10.0 (2024-08-29)**
+- ENH: Forked by ZabLove and added support for 7.0.3
+
 **0.9.11 (2023-05-02)**
 - ENH: Support for Zabbix 6.4
 - FIX: force decimal interpretation in db versioning
