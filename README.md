@@ -1,6 +1,6 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.2.
+This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.4.
 
 ## Download
 
@@ -16,7 +16,7 @@ Please see the [Project Wiki](https://github.com/npotorino/zabbix-backup/wiki).
 
 ### Backup
 
-Example: backup Zabbix 5.0.1 with PostgreSQL and TimeScaleDB
+Example: backup Zabbix with PostgreSQL and TimeScaleDB
 
 ```
 git clone https://github.com/npotorino/zabbix-backup
@@ -27,24 +27,51 @@ cd zabbix-backup
 ### Restore
 
 Example: restore Zabbix 5.0 with PostgreSQL and TimeScaleDB
+```bash
+# systemctl stop zabbix-server.service
+su - postgres
+dropdb zabbix
+createdb -O zabbix zabbix
 
-```
-systemctl stop zabbix-server.service
-sudo -u postgres dropdb zabbix
-sudo -u postgres createdb -O zabbix zabbix
-
-echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | sudo -u postgres psql zabbix
-echo "SELECT timescaledb_pre_restore();" | sudo -u postgres psql zabbix
+echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
+echo "SELECT timescaledb_pre_restore();" | psql zabbix
 
 gunzip /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
-sudo -u postgres psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 
-echo "SELECT timescaledb_post_restore();" | sudo -u postgres psql zabbix
+echo "SELECT timescaledb_post_restore();" | psql zabbix
 systemctl restart postgresql-12.service
-systemctl start zabbix-server.service
+# systemctl start zabbix-server.service
+```
+
+A different approach using the original schema and `pg_restore` with the custom format. Zabbix version: 5.0. PostgreSQL with TimescaleDB.
+```bash
+# systemctl stop zabbix-server.service
+su - postgres
+dropdb zabbix
+# we assume the zabbix user already exists, if it doesnt: createuser --pwprompt zabbix
+createdb -O zabbix zabbix
+cat /usr/share/zabbix-postgresql/schema.sql | psql -h 127.0.0.1 -U zabbix -d zabbix
+gunzip zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
+pg_restore --disable-triggers --data-only -d zabbix zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
+cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
 ```
 
 ## Version history
+
+**0.9.11 (2023-05-02)**
+- ENH: Support for Zabbix 6.4
+- FIX: force decimal interpretation in db versioning
+
+**0.9.10 (2022-09-30)**
+- FIX: use the default schema for PostgreSQL, when command line parameter is not set
+
+**0.9.9 (2022-08-31)**
+- ENH: zabbix dump add custom format (pg), stdout dump (@gullevek)
+- ENH: minimal automated syntax check through Github Actions
+- FIX: table schema for PostgreSQL (@jokay)
+- FIX: retrieving DBPassword when it contains a "=" (@mathieumd)
 
 **0.9.8 (2022-07-27)**
 - ENH: Support for Zabbix 6.2
