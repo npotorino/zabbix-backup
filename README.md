@@ -1,6 +1,6 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 6.4.
+This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 7.2.
 
 ## Download
 
@@ -59,6 +59,12 @@ cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
 ```
 
 ## Version history
+
+**0.9.13 (2025-03-17)**
+- ENH: Support for Zabbix 7.2
+
+**0.9.12 (2024-09-92)**
+- ENH: Support for Zabbix 7.0
 
 **0.9.11 (2023-05-02)**
 - ENH: Support for Zabbix 6.4
