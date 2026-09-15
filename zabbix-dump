@@ -497,10 +497,10 @@ fi
 VERSION=""
 case $DBTYPE in
     mysql)
-        DB_VER=$(mysql "${DB_OPTS_BATCH[@]}" -N -e "select optional from dbversion;" 2>/dev/null)
+        DB_VER=$(mysql "${DB_OPTS_BATCH[@]}" -N -e "select optional from dbversion limit 1;" 2>/dev/null)
         ;;
     psql)
-        DB_VER=$(psql "${DB_OPTS_BATCH[@]}" -c "select optional from dbversion;" 2>/dev/null)
+        DB_VER=$(psql "${DB_OPTS_BATCH[@]}" -c "select optional from dbversion limit 1;" 2>/dev/null)
         ;;
 esac
 if [ $? -eq 0 ]; then
