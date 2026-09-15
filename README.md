@@ -94,6 +94,7 @@ zabbix-dump [options]
 | `-n` | Skip reverse DNS lookup of the database host | — |
 | `-N` | Add column names to `INSERT INTO .. VALUES ..`, quoting as needed | — |
 | `-C` | Use PostgreSQL's custom dump format (required for `pg_restore`) | plain SQL |
+| `-T` | Keep triggers' PROBLEM state as-is instead of resetting it (see restore notes below) | reset |
 | `-f` | Force backup of unknown tables (full data, forward compatibility) | — |
 | `-i` | Ignore unknown tables (exclude them from the backup) | — |
 | `-q` | Quiet mode: no output except errors (for cron/batch use) | — |
@@ -135,6 +136,32 @@ last 7 generations:
 > (empty) target schema using `--disable-triggers --data-only`, as shown below — this avoids
 > re-validating foreign keys that a plain, single-pass SQL restore may check as part of applying
 > post-data constraints.
+
+> **Note on trigger state:** `triggers.value` (0 = OK, 1 = PROBLEM) is configuration data, so it
+> *is* restored — but since `problem`/`events` data isn't, a trigger that was in the PROBLEM state
+> at backup time comes back with no matching row in `problem` to justify it, and `zabbix-server`
+> treats that value as "no change" on startup, so it may never re-fire a notification for a
+> trigger that's genuinely still down. To avoid this, `zabbix-dump` **automatically appends**
+> ```sql
+> UPDATE triggers SET value = 0, lastchange = 0, error = '' WHERE value = 1;
+> ```
+> to the dump, so it takes effect as part of a normal restore (`mysql < dump.sql` /
+> `psql < dump.sql`) with no extra step required. Two caveats:
+> - This only works when the dump is restored as plain SQL. A PostgreSQL custom-format dump
+>   (`-C`) is a binary archive restored with `pg_restore`, which can't have SQL appended to it —
+>   in that case the statement is written to a `<dumpfile>.post-restore.sql` companion file
+>   instead (or printed to stderr when dumping to stdout with `-o -`); run it manually against
+>   the restored database.
+> - The reset assumes you're restoring into a freshly emptied database. If instead you're
+>   restoring the configuration into a database that keeps its own live monitoring data (e.g.
+>   syncing prod config onto a test server without touching the test server's history), pass
+>   `-T` to skip the automatic reset, and run this more selective version yourself so you don't
+>   clear triggers that still have a genuinely active problem there:
+>   ```sql
+>   UPDATE triggers SET value = 0, lastchange = 0, error = ''
+>    WHERE value = 1
+>      AND triggerid NOT IN (SELECT objectid FROM problem WHERE r_eventid IS NULL);
+>   ```
 
 #### MySQL
 

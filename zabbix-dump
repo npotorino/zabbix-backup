@@ -64,6 +64,7 @@ GENERATIONSTOKEEP=0
 ZBX_CONFIG="/etc/zabbix/zabbix_server.conf"
 READ_ZBX_CONFIG="yes"
 HANDLE_UNKNOWN="fail"
+RESET_TRIGGER_STATE="yes"
 
 #
 # Show version
@@ -159,6 +160,14 @@ OPTIONS
     -C
         Custom dump format. (PostgreSQL only)
 
+    -T
+        Keep triggers' PROBLEM state (value/lastchange/error) as-is instead of
+        resetting it in the dump. By default, since problem/event data isn't
+        backed up, any trigger left in the PROBLEM state is reset to avoid a
+        stale state with no matching problem record after restore. Use -T if
+        you are restoring the configuration into a database that keeps its
+        own live monitoring data (the trigger state there is still correct).
+
     -f
         Force backup for unknown tables / forward compatibility:
         Don't complain about unknown tables and make a full backup of them
@@ -204,7 +213,7 @@ fi
 # PARSE COMMAND LINE ARGUMENTS
 #
 DB_GIVEN=0
-while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfiv" opt; do
+while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfivT" opt; do
     case $opt in
         t)  DBTYPE="$OPTARG" ;;
         H)  ODBHOST="$OPTARG" ;;
@@ -224,6 +233,7 @@ while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfiv" opt; do
         n)  REVERSELOOKUP="no" ;;
         N)  COLUMN_NAMES="yes" ;;
         C)  CUSTOM_FORMAT="yes" ;;
+        T)  RESET_TRIGGER_STATE="no" ;;
         f)  HANDLE_UNKNOWN="backup" ;;
         i)  HANDLE_UNKNOWN="ignore" ;;
         q)  QUIET="yes" ;;
@@ -519,6 +529,12 @@ DUMPFILE="$DUMPDIR/$DUMPFILEBASE"
 PROCESSED_SCHEMAONLY_TABLES=()
 i=0
 
+# triggers.value/lastchange/error reflect PROBLEM state, but problem/events data
+# (which would justify that state) is excluded from the dump. Left as-is, a trigger
+# restored with value=1 has no matching problem row, which can prevent zabbix-server
+# from re-firing a notification for a trigger that is genuinely still down.
+TRIGGER_FIXUP_SQL="UPDATE triggers SET value = 0, lastchange = 0, error = '' WHERE value = 1;"
+
 # make folder if not std out
 [ "$DUMPDIR" != "-" ] && mkdir -p "${DUMPDIR}"
 
@@ -564,6 +580,15 @@ case $DBTYPE in
         fi;
 
         if [ $? -ne 0 ]; then echo $'\nERROR: Could not backup table data.\n' >&2; cat $ERRORLOG >&2; exit 1; fi
+
+        # neutralize stale trigger PROBLEM state (see TRIGGER_FIXUP_SQL above)
+        if [ "$RESET_TRIGGER_STATE" == "yes" ]; then
+            if [ "$DUMPDIR" != "-" ]; then
+                echo "$TRIGGER_FIXUP_SQL" >> "$DUMPFILE"
+            else
+                echo "$TRIGGER_FIXUP_SQL"
+            fi
+        fi
     ;;
     psql)
         DUMP_OPTS=()
@@ -592,6 +617,25 @@ case $DBTYPE in
             cat $ERRORLOG >&2
             clean_psql_pass
             exit 1
+        fi
+
+        # neutralize stale trigger PROBLEM state (see TRIGGER_FIXUP_SQL above).
+        # Only possible for plain-format dumps: a custom-format (-C) dump is a
+        # binary archive restored via pg_restore, so the statement is written
+        # to a companion file to be applied manually after restore instead.
+        if [ "$RESET_TRIGGER_STATE" == "yes" ]; then
+            if [ "${CUSTOM_FORMAT}" == "no" ]; then
+                if [ "$DUMPDIR" != "-" ]; then
+                    echo "$TRIGGER_FIXUP_SQL" >> "$DUMPFILE"
+                else
+                    echo "$TRIGGER_FIXUP_SQL"
+                fi
+            elif [ "$DUMPDIR" != "-" ]; then
+                echo "$TRIGGER_FIXUP_SQL" > "${DUMPFILE}.post-restore.sql"
+                [ "$QUIET" == "no" ] && echo "Note: run ${DUMPFILEBASE}.post-restore.sql against the restored database after restore (custom format can't embed it)."
+            else
+                [ "$QUIET" == "no" ] && echo "Note: apply manually after restore: $TRIGGER_FIXUP_SQL" >&2
+            fi
         fi
     ;;
 esac
