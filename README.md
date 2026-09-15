@@ -1,6 +1,55 @@
 # Backup script for Zabbix configuration data (MySQL/PostgreSQL)
 
-This is a MySQL/PostgreSQL database backup script for the [Zabbix](http://www.zabbix.com/) monitoring software from version 1.3.1 up to 7.2.
+[![CI](https://github.com/npotorino/zabbix-backup/actions/workflows/main.yml/badge.svg)](https://github.com/npotorino/zabbix-backup/actions/workflows/main.yml)
+
+`zabbix-dump` is a single Bash script that backs up a [Zabbix](http://www.zabbix.com/) MySQL or
+PostgreSQL database, covering every Zabbix version from 1.3.1 up to 7.4.
+
+Instead of dumping the whole database (which for a busy Zabbix instance can mean gigabytes of
+history/trends data), it dumps a **configuration-only** backup: small "configuration" tables
+(hosts, items, triggers, actions, users, ...) are backed up with their data, while large
+operational/runtime tables are backed up schema-only, keeping the backup small and fast.
+
+## How it works
+
+Every table Zabbix has ever shipped is listed at the end of the script, together with the Zabbix
+version range it existed in and a `SCHEMAONLY` flag for tables that should be excluded from the
+data dump:
+
+```
+service_alarms             1.3.1    - 7.4.14
+service_problem            6.0.0    - 7.4.14    SCHEMAONLY
+service_problem_tag        6.0.0    - 7.4.14    SCHEMAONLY
+```
+
+At runtime the script reads the current table list from the database itself, so it only acts on
+tables that actually exist in your Zabbix version — a `SCHEMAONLY` table that doesn't exist yet
+(e.g. on an older Zabbix) is simply ignored.
+
+Tables flagged `SCHEMAONLY` (history, history_uint, trends, trends_uint, events, problem,
+service_problem, auditlog, ...) get their **schema backed up but no rows**. Everything else is
+backed up in full, including data.
+
+### Handling unknown tables (new Zabbix versions)
+
+If your Zabbix database contains a table the script doesn't know about yet (for example right
+after a Zabbix upgrade that added new tables before this script's table list was updated), it
+will by default **stop with an error** rather than silently guess whether the table should be
+backed up. You can change this behavior:
+
+- `-f` — treat unknown tables as configuration data and back them up in full (safe default if
+  you're unsure, at the cost of a possibly larger backup).
+- `-i` — ignore unknown tables entirely (exclude them from the backup).
+
+Either way, please [open an issue](https://github.com/npotorino/zabbix-backup/issues) so the
+table list can be updated for everyone.
+
+## Requirements
+
+- `bash`
+- For MySQL: the `mysql` and `mysqldump` client binaries
+- For PostgreSQL: the `psql` and `pg_dump` client binaries
+- `dig` (optional, used for reverse DNS lookup of the database host; skip with `-n`)
 
 ## Download
 
@@ -8,25 +57,104 @@ Download the latest (stable) release here:
 
 https://github.com/npotorino/zabbix-backup/releases/latest
 
-## More informations
+or clone the repository directly:
+
+```bash
+git clone https://github.com/npotorino/zabbix-backup
+cd zabbix-backup
+```
+
+## More information
 
 Please see the [Project Wiki](https://github.com/npotorino/zabbix-backup/wiki).
+
+## Usage
+
+```
+zabbix-dump [options]
+```
+
+| Option | Description | Default |
+|---|---|---|
+| `-t DATABASE_TYPE` | Database type: `mysql` or `psql` | `mysql` |
+| `-H DBHOST` | Hostname/IP of the database server | `127.0.0.1` |
+| `-P DBPORT` | DBMS port | `3306` (mysql) / `5432` (psql) |
+| `-s DBSOCKET` | Path to a DBMS socket file, as an alternative to `-H`/`-P` | — |
+| `-S SCHEMA` | Database schema (PostgreSQL only) | `public` |
+| `-d DATABASE` | Name of the Zabbix database | `zabbix` |
+| `-u DBUSER` | DBMS user | `zabbix` |
+| `-p DBPASSWORD` | DBMS user password (use `-` to be prompted) | no password |
+| `-o DIR` | Directory to save the dump to (`-` streams the dump to stdout) | `$PWD` |
+| `-z ZABBIX_CONFIG` | Read DB host/credentials from a Zabbix server config file | `/etc/zabbix/zabbix_server.conf` |
+| `-Z` | Do not try to read the Zabbix server configuration | — |
+| `-c MYSQL_CONFIG` | MySQL only: read DB host/credentials from a MySQL config file | — |
+| `-r NUM` | Rotate backups, keeping up to `NUM` generations (matched by filename) | keep all |
+| `-x` | Compress using XZ instead of GZip (smaller, slower) | — |
+| `-0` | Do not compress the dump | — |
+| `-n` | Skip reverse DNS lookup of the database host | — |
+| `-N` | Add column names to `INSERT INTO .. VALUES ..`, quoting as needed | — |
+| `-C` | Use PostgreSQL's custom dump format (required for `pg_restore`) | plain SQL |
+| `-f` | Force backup of unknown tables (full data, forward compatibility) | — |
+| `-i` | Ignore unknown tables (exclude them from the backup) | — |
+| `-q` | Quiet mode: no output except errors (for cron/batch use) | — |
+| `-h`, `--help` | Show help | — |
+| `--version` | Show the script version | — |
+
+Run `./zabbix-dump --help` for the full built-in help text.
 
 ## Examples
 
 ### Backup
 
-Example: backup Zabbix with PostgreSQL and TimeScaleDB
+Backup a local MySQL Zabbix database, reading connection details from
+`/etc/zabbix/zabbix_server.conf`:
 
+```bash
+./zabbix-dump
 ```
-git clone https://github.com/npotorino/zabbix-backup
-cd zabbix-backup
+
+Backup Zabbix with PostgreSQL and TimescaleDB:
+
+```bash
 ./zabbix-dump -t psql -H localhost -P 5432 -o /var/backup
+```
+
+Backup without reading `zabbix_server.conf`, asking for the password interactively, keeping the
+last 7 generations:
+
+```bash
+./zabbix-dump -Z -d zabbixdb -u zabbix -p - -o /var/backup -r 7
 ```
 
 ### Restore
 
-Example: restore Zabbix 5.0 with PostgreSQL and TimeScaleDB
+> **Note on foreign keys:** the tables the script dumps schema-only (`history*`, `trends*`,
+> `events`, `problem`, `service_problem`, ...) are intentionally left empty. The dump is built so
+> that no table with data references one of those emptied tables, so a restore stays
+> referentially consistent. The safest way to load it back is against an already-created
+> (empty) target schema using `--disable-triggers --data-only`, as shown below — this avoids
+> re-validating foreign keys that a plain, single-pass SQL restore may check as part of applying
+> post-data constraints.
+
+#### MySQL
+
+```bash
+# systemctl stop zabbix-server
+gunzip zabbix_cfg_localhost_20200730-1810_db-mysql-5.0.1.sql.gz
+mysql -u zabbix -p zabbix < zabbix_cfg_localhost_20200730-1810_db-mysql-5.0.1.sql
+# systemctl start zabbix-server
+```
+
+(If the database doesn't exist yet, create it first — see the
+[Zabbix installation docs](https://www.zabbix.com/documentation/current/en/manual/installation/install)
+for the recommended character set/collation for your Zabbix version.)
+
+#### PostgreSQL
+
+Example: restore Zabbix 5.0 with PostgreSQL and TimescaleDB, from a plain-format dump
+(the default; the TimescaleDB helper functions below apply to the TimescaleDB version used at
+the time this example was written — check your installed version's own restore instructions):
+
 ```bash
 # systemctl stop zabbix-server.service
 su - postgres
@@ -44,26 +172,53 @@ systemctl restart postgresql-12.service
 # systemctl start zabbix-server.service
 ```
 
-A different approach using the original schema and `pg_restore` with the custom format. Zabbix version: 5.0. PostgreSQL with TimescaleDB.
+A different approach using the original Zabbix schema and `pg_restore` with the custom dump
+format (`-C`). Zabbix version: 5.0. PostgreSQL with TimescaleDB:
+
 ```bash
+# create the backup using the custom format
+./zabbix-dump -t psql -C -H localhost -P 5432 -o /var/backup
+
+# ...later, restore it:
 # systemctl stop zabbix-server.service
 su - postgres
 dropdb zabbix
-# we assume the zabbix user already exists, if it doesnt: createuser --pwprompt zabbix
+# we assume the zabbix user already exists, if it doesn't: createuser --pwprompt zabbix
 createdb -O zabbix zabbix
 cat /usr/share/zabbix-postgresql/schema.sql | psql -h 127.0.0.1 -U zabbix -d zabbix
-gunzip zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
-pg_restore --disable-triggers --data-only -d zabbix zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
+gunzip /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
+pg_restore --disable-triggers --data-only -d zabbix /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
 cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
+# systemctl start zabbix-server.service
 ```
 
+## Development
+
+- The full table list is generated with the included [`get-table-list.pl`](get-table-list.pl)
+  helper, which walks tagged Zabbix releases to find every table's version range. New releases
+  still need a human pass to flag any new/changed table as `SCHEMAONLY` where appropriate.
+- See [`TESTING.md`](TESTING.md) for instructions to spin up disposable MySQL/PostgreSQL Zabbix
+  containers for manual backup/restore testing.
+- Pull requests are checked by [ShellCheck](https://www.shellcheck.net/) via GitHub Actions
+  (see [`.github/workflows/main.yml`](.github/workflows/main.yml)).
+
+## License
+
+Released under the [MIT License](LICENSE.txt).
+
 ## Version history
+
+no release yet:
+- FIX: exclude `service_problem`/`service_problem_tag` data (orphaned FK to schema-only `problem`/`events`)
+
+**0.9.14 (2026-02-24)**
+- ENH: Support for Zabbix 7.4
 
 **0.9.13 (2025-03-17)**
 - ENH: Support for Zabbix 7.2
 
-**0.9.12 (2024-09-92)**
+**0.9.12 (2024-09-02)**
 - ENH: Support for Zabbix 7.0
 
 **0.9.11 (2023-05-02)**
