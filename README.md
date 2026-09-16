@@ -298,11 +298,13 @@ Released under the [MIT License](LICENSE.txt).
 
 ## Version history
 
-no release yet:
-- FIX: exclude `service_problem`/`service_problem_tag` data (orphaned FK to schema-only `problem`/`events`)
-
-**0.9.14 (2026-02-24)**
+**0.9.14 (2026-09-16)**
 - ENH: Support for Zabbix 7.4
+- FIX: exclude `service_problem`/`service_problem_tag` data (orphaned FK to schema-only `problem`/`events`)
+- FIX: pin dbversion query to a single row, fixing corrupted dump filenames (#16)
+- FIX: only add DBPORT for mysql when no socket is in use (#30)
+- ENH: reset stale trigger PROBLEM state in the dump by default, with `-T` to opt out (#34)
+- ENH: strip TimescaleDB's `ts_insert_blocker` triggers from the dump by default, with `-B` to opt out (#11)
 
 **0.9.13 (2025-03-17)**
 - ENH: Support for Zabbix 7.2
