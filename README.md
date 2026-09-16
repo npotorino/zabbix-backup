@@ -95,6 +95,7 @@ zabbix-dump [options]
 | `-N` | Add column names to `INSERT INTO .. VALUES ..`, quoting as needed | — |
 | `-C` | Use PostgreSQL's custom dump format (required for `pg_restore`) | plain SQL |
 | `-T` | Keep triggers' PROBLEM state as-is instead of resetting it (see restore notes below) | reset |
+| `-B` | Keep TimescaleDB's `ts_insert_blocker` triggers in the dump (PostgreSQL only, see restore notes below) | stripped |
 | `-f` | Force backup of unknown tables (full data, forward compatibility) | — |
 | `-i` | Ignore unknown tables (exclude them from the backup) | — |
 | `-q` | Quiet mode: no output except errors (for cron/batch use) | — |
@@ -178,29 +179,80 @@ for the recommended character set/collation for your Zabbix version.)
 
 #### PostgreSQL
 
-Example: restore Zabbix 5.0 with PostgreSQL and TimescaleDB, from a plain-format dump
-(the default; the TimescaleDB helper functions below apply to the TimescaleDB version used at
-the time this example was written — check your installed version's own restore instructions):
-
 ```bash
 # systemctl stop zabbix-server.service
-su - postgres
-dropdb zabbix
-createdb -O zabbix zabbix
-
-echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
-echo "SELECT timescaledb_pre_restore();" | psql zabbix
-
 gunzip /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
-psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
-
-echo "SELECT timescaledb_post_restore();" | psql zabbix
-systemctl restart postgresql-12.service
+sudo -u postgres psql zabbix < /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 # systemctl start zabbix-server.service
 ```
 
+(If the database doesn't exist yet, create it first: `sudo -u postgres createdb -O zabbix zabbix`.)
+
+#### PostgreSQL + TimescaleDB
+
+`zabbix-dump` writes a **configuration-only** backup, so history/trends stay schema-only and the
+dump carries no usable TimescaleDB state. The hypertables have to be rebuilt from the
+`timescaledb.sql` script shipped with your Zabbix version, *after* the configuration has been
+restored.
+
+Restoring the dump as-is and starting the server fails with:
+
+```
+[Z3005] query failed: ... ERROR: table "history" is not a hypertable
+[select set_integer_now_func('history', 'zbx_ts_unix_now', true)]
+```
+
+because the `ts_insert_blocker` triggers contained in the dump get applied to tables that aren't
+(yet) hypertables (see [#11](https://github.com/npotorino/zabbix-backup/issues/11)). A plain-format
+PostgreSQL dump strips those triggers **automatically by default** (pass `-B` at backup time to
+keep them instead — see Usage above); then just let Zabbix rebuild the hypertables on the (now
+empty) history tables:
+
+```bash
+systemctl stop zabbix-server
+
+# 1. empty database (assumes the 'zabbix' role exists, otherwise:
+#    sudo -u postgres createuser --pwprompt zabbix)
+sudo -u postgres dropdb zabbix
+sudo -u postgres createdb -O zabbix zabbix
+
+# 2. restore the configuration
+zcat zabbix_cfg_<host>_<date>_db-psql-<version>.sql.gz | sudo -u postgres psql zabbix
+
+# 3. install the extension and rebuild the hypertables with Zabbix's own script
+#    (history/trends are empty, so the conversion is clean)
+echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | sudo -u postgres psql zabbix
+sudo -u postgres psql zabbix < /usr/share/zabbix-sql-scripts/postgresql/timescaledb.sql
+
+systemctl start zabbix-server
+```
+
+Use the `timescaledb.sql` from the **same** Zabbix version as the backup; its path depends on
+your packages (e.g. `/usr/share/zabbix-sql-scripts/postgresql/`).
+
+**Notes**
+
+- Restoring a dump made with `-B`, or one from before this fix, still hits the error above —
+  strip the triggers manually before restoring in that case:
+  ```bash
+  zcat zabbix_cfg_<host>_<date>_db-psql-<version>.sql.gz \
+    | grep -v 'CREATE TRIGGER ts_insert_blocker' \
+    | sudo -u postgres psql zabbix
+  ```
+- If the restore also fails on `_timescaledb_catalog` objects, create the backup with `-S public`
+  so the internal TimescaleDB schemas are never dumped.
+- `pg_dump` 15.15 / 16.x / 17.x+ (the Aug 2025 security fix) writes `\restrict` / `\unrestrict`
+  meta-commands into the dump. An older restoring `psql` reports `invalid command \restrict`;
+  either upgrade the client or drop those lines, e.g. add `sed -E '/^\\(un)?restrict /d'` to the
+  pipe in step 2.
+- A dump made with a current `zabbix-dump` no longer needs any extra handling for the
+  `c_service_problem_1` foreign key here — `service_problem`/`service_problem_tag` are dumped
+  schema-only (see the note on foreign keys above). Only dumps made before that fix need it.
+
+#### PostgreSQL, custom dump format (`-C`) with `pg_restore`
+
 A different approach using the original Zabbix schema and `pg_restore` with the custom dump
-format (`-C`). Zabbix version: 5.0. PostgreSQL with TimescaleDB:
+format (`-C`). Zabbix version: 5.0.
 
 ```bash
 # create the backup using the custom format
@@ -215,9 +267,19 @@ createdb -O zabbix zabbix
 cat /usr/share/zabbix-postgresql/schema.sql | psql -h 127.0.0.1 -U zabbix -d zabbix
 gunzip /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.gz
 pg_restore --disable-triggers --data-only -d zabbix /var/backup/zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
-echo "CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE;" | psql zabbix
-cat /usr/share/zabbix-postgresql/timescaledb.sql | psql zabbix
 # systemctl start zabbix-server.service
+```
+
+If the underlying database uses TimescaleDB, install the extension and rebuild the hypertables as
+in the "PostgreSQL + TimescaleDB" steps above — the same `ts_insert_blocker` pitfall applies here
+too, but since a custom-format archive is binary, the triggers can't be stripped from the dump
+file directly. Instead, `zabbix-dump -C` writes a companion `<dumpfile>.toc` file next to it
+(unless `-B` was passed) — restore with that TOC instead of a plain `pg_restore` invocation to
+skip them:
+
+```bash
+pg_restore --use-list=zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql.toc \
+  --disable-triggers --data-only -d zabbix zabbix_cfg_localhost_20200730-1810_db-psql-5.0.1.sql
 ```
 
 ## Development

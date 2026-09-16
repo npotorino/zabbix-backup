@@ -65,6 +65,7 @@ ZBX_CONFIG="/etc/zabbix/zabbix_server.conf"
 READ_ZBX_CONFIG="yes"
 HANDLE_UNKNOWN="fail"
 RESET_TRIGGER_STATE="yes"
+STRIP_TS_INSERT_BLOCKER="yes"
 
 #
 # Show version
@@ -168,6 +169,18 @@ OPTIONS
         you are restoring the configuration into a database that keeps its
         own live monitoring data (the trigger state there is still correct).
 
+    -B
+        Keep TimescaleDB's ts_insert_blocker triggers on history/trends
+        tables in the dump instead of stripping them. (PostgreSQL only)
+        By default they are removed from a plain-format dump, since
+        restoring them onto a plain (not-yet-hypertable) table conflicts
+        with rebuilding the hypertables via Zabbix's own timescaledb.sql
+        afterward. Only relevant if the source database uses TimescaleDB;
+        harmless no-op otherwise. Custom-format (-C) dumps can't have the
+        trigger stripped directly (binary archive); a companion
+        "<dumpfile>.toc" file is written instead for use with
+        `pg_restore --use-list`.
+
     -f
         Force backup for unknown tables / forward compatibility:
         Don't complain about unknown tables and make a full backup of them
@@ -213,7 +226,7 @@ fi
 # PARSE COMMAND LINE ARGUMENTS
 #
 DB_GIVEN=0
-while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfivT" opt; do
+while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfivTB" opt; do
     case $opt in
         t)  DBTYPE="$OPTARG" ;;
         H)  ODBHOST="$OPTARG" ;;
@@ -234,6 +247,7 @@ while getopts ":c:S:d:H:o:p:P:r:s:t:u:z:0nNCqxZfivT" opt; do
         N)  COLUMN_NAMES="yes" ;;
         C)  CUSTOM_FORMAT="yes" ;;
         T)  RESET_TRIGGER_STATE="no" ;;
+        B)  STRIP_TS_INSERT_BLOCKER="no" ;;
         f)  HANDLE_UNKNOWN="backup" ;;
         i)  HANDLE_UNKNOWN="ignore" ;;
         q)  QUIET="yes" ;;
@@ -606,13 +620,25 @@ case $DBTYPE in
 
         [ -n "$DBSCHEMA" ] && DUMP_OPTS=("${DUMP_OPTS[@]}" -n $DBSCHEMA)
 
-        if [ "$DUMPDIR" != "-" ]; then
-            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME > "$DUMPFILE" 2>$ERRORLOG
-        else
-            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME 2>$ERRORLOG
-        fi;
+        # TimescaleDB's ts_insert_blocker triggers get dumped along with the
+        # schema-only history/trends tables, but they're only valid attached to
+        # a hypertable. Restoring them onto a plain (not-yet-hypertable) table
+        # conflicts with rebuilding the hypertables via timescaledb.sql
+        # afterward. Strip them from plain-format dumps (harmless no-op if the
+        # source database doesn't use TimescaleDB). Custom format (-C) is
+        # handled separately below, since it's a binary archive.
+        PG_DUMP_FILTER=(cat)
+        if [ "$STRIP_TS_INSERT_BLOCKER" == "yes" ] && [ "${CUSTOM_FORMAT}" == "no" ]; then
+            PG_DUMP_FILTER=(grep -v "CREATE TRIGGER ts_insert_blocker")
+        fi
 
-        if [ $? -ne 0 ]; then
+        if [ "$DUMPDIR" != "-" ]; then
+            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME 2>$ERRORLOG | "${PG_DUMP_FILTER[@]}" > "$DUMPFILE"
+        else
+            pg_dump "${DB_OPTS[@]}" "${DUMP_OPTS[@]}" -d $DBNAME 2>$ERRORLOG | "${PG_DUMP_FILTER[@]}"
+        fi;
+        # check pg_dump's exit code specifically, not the filter's (PIPESTATUS[0])
+        if [ ${PIPESTATUS[0]} -ne 0 ]; then
             echo $'\nERROR: Could not backup database.\n' >&2
             cat $ERRORLOG >&2
             clean_psql_pass
@@ -635,6 +661,17 @@ case $DBTYPE in
                 [ "$QUIET" == "no" ] && echo "Note: run ${DUMPFILEBASE}.post-restore.sql against the restored database after restore (custom format can't embed it)."
             else
                 [ "$QUIET" == "no" ] && echo "Note: apply manually after restore: $TRIGGER_FIXUP_SQL" >&2
+            fi
+        fi
+
+        # ts_insert_blocker can't be stripped from a custom-format archive directly
+        # (see PG_DUMP_FILTER above); write a ready-to-use pg_restore TOC instead.
+        if [ "$STRIP_TS_INSERT_BLOCKER" == "yes" ] && [ "${CUSTOM_FORMAT}" == "yes" ]; then
+            if [ "$DUMPDIR" != "-" ]; then
+                pg_restore --list "$DUMPFILE" 2>/dev/null | sed '/ts_insert_blocker/s/^/;/' > "${DUMPFILE}.toc"
+                [ "$QUIET" == "no" ] && echo "Note: restore with \`pg_restore --use-list=${DUMPFILEBASE}.toc ...\` to skip TimescaleDB's ts_insert_blocker triggers (custom format can't have them stripped directly)."
+            else
+                [ "$QUIET" == "no" ] && echo "Note: if the source database uses TimescaleDB, exclude ts_insert_blocker triggers manually via a pg_restore --use-list TOC (custom format can't have them stripped directly)." >&2
             fi
         fi
     ;;
